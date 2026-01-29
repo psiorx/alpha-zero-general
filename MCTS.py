@@ -17,6 +17,9 @@ class MCTS():
         self.game = game
         self.nnet = nnet
         self.args = args
+        self.debug = getattr(args, "debug", False)
+        self.debug_root_actions = []
+        self.debug_root_ucb = []
         self.Qsa = {}  # stores Q values for s,a (as defined in the paper)
         self.Nsa = {}  # stores #times edge s,a was visited
         self.Ns = {}  # stores #times board s was visited
@@ -35,7 +38,7 @@ class MCTS():
                    proportional to Nsa[(s,a)]**(1./temp)
         """
         for i in range(self.args.numMCTSSims):
-            self.search(canonicalBoard)
+            self.search(canonicalBoard, depth=0)
 
         s = self.game.stringRepresentation(canonicalBoard)
         counts = [self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in range(self.game.getActionSize())]
@@ -52,7 +55,7 @@ class MCTS():
         probs = [x / counts_sum for x in counts]
         return probs
 
-    def search(self, canonicalBoard):
+    def search(self, canonicalBoard, depth=0):
         """
         This function performs one iteration of MCTS. It is recursively called
         till a leaf node is found. The action chosen at each node is one that
@@ -118,11 +121,26 @@ class MCTS():
                     cur_best = u
                     best_act = a
 
+        if self.debug and depth == 0:
+            ucb = []
+            for a in range(self.game.getActionSize()):
+                if valids[a]:
+                    if (s, a) in self.Qsa:
+                        u = self.Qsa[(s, a)] + self.args.cpuct * self.Ps[s][a] * math.sqrt(self.Ns[s]) / (
+                                1 + self.Nsa[(s, a)])
+                    else:
+                        u = self.args.cpuct * self.Ps[s][a] * math.sqrt(self.Ns[s] + EPS)
+                else:
+                    u = -1e9
+                ucb.append(u)
+            self.debug_root_ucb.append(ucb)
+            self.debug_root_actions.append(best_act)
+
         a = best_act
         next_s, next_player = self.game.getNextState(canonicalBoard, 1, a)
         next_s = self.game.getCanonicalForm(next_s, next_player)
 
-        v = self.search(next_s)
+        v = self.search(next_s, depth=depth + 1)
 
         if (s, a) in self.Qsa:
             self.Qsa[(s, a)] = (self.Nsa[(s, a)] * self.Qsa[(s, a)] + v) / (self.Nsa[(s, a)] + 1)

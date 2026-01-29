@@ -15,7 +15,7 @@ from NeuralNet import NeuralNet
 import torch
 import torch.optim as optim
 
-from .OthelloNNet import OthelloNNet as onnet
+from .Connect4NNet import Connect4NNet as onnet
 
 args = dotdict({
     'lr': 0.001,
@@ -43,9 +43,10 @@ class NNetWrapper(NeuralNet):
         examples: list of examples, each example is of form (board, pi, v)
         """
         optimizer = optim.Adam(self.nnet.parameters())
-
         first_loss = None
         last_loss = None
+        grad_norms = []
+
         for epoch in range(self.args.epochs):
             if not self.args.minimal_logging:
                 print('EPOCH ::: ' + str(epoch + 1))
@@ -64,11 +65,11 @@ class NNetWrapper(NeuralNet):
                 target_pis = torch.FloatTensor(np.array(pis))
                 target_vs = torch.FloatTensor(np.array(vs).astype(np.float64))
 
-                # predict
                 if self.args.cuda:
-                    boards, target_pis, target_vs = boards.contiguous().cuda(), target_pis.contiguous().cuda(), target_vs.contiguous().cuda()
+                    boards = boards.contiguous().cuda()
+                    target_pis = target_pis.contiguous().cuda()
+                    target_vs = target_vs.contiguous().cuda()
 
-                # compute output
                 out_pi, out_v = self.nnet(boards)
                 l_pi = self.loss_pi(target_pis, out_pi)
                 l_v = self.loss_v(target_vs, out_v)
@@ -78,18 +79,27 @@ class NNetWrapper(NeuralNet):
                     first_loss = (l_pi.item(), l_v.item())
                 last_loss = (l_pi.item(), l_v.item())
 
-                # record loss
                 pi_losses.update(l_pi.item(), boards.size(0))
                 v_losses.update(l_v.item(), boards.size(0))
                 if use_tqdm:
                     loop.set_postfix(Loss_pi=pi_losses, Loss_v=v_losses)
 
-                # compute gradient and do SGD step
                 optimizer.zero_grad()
                 total_loss.backward()
+                
+                # Compute gradient norm
+                grad_norm = 0.0
+                for p in self.nnet.parameters():
+                    if p.grad is not None:
+                        grad_norm += p.grad.data.norm(2).item() ** 2
+                grad_norm = grad_norm ** 0.5
+                grad_norms.append(grad_norm)
+                
                 optimizer.step()
         if first_loss is None or last_loss is None:
             return None
+        # Return tuple format for backward compatibility, plus extended info
+        self.last_grad_norm = float(np.mean(grad_norms)) if grad_norms else 0.0
         return first_loss, last_loss
 
     def predict(self, board):
@@ -99,7 +109,6 @@ class NNetWrapper(NeuralNet):
         # timing
         start = time.time()
 
-        # preparing input
         board = torch.FloatTensor(board.astype(np.float64))
         if self.args.cuda:
             board = board.contiguous().cuda()

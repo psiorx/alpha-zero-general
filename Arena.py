@@ -1,6 +1,9 @@
 import logging
 
-from tqdm import tqdm
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None
 
 log = logging.getLogger(__name__)
 
@@ -78,7 +81,7 @@ class Arena():
             self.display(board)
         return curPlayer * self.game.getGameEnded(board, curPlayer)
 
-    def playGames(self, num, verbose=False):
+    def playGames(self, num, verbose=False, use_tqdm=True):
         """
         Plays num games in which player1 starts num/2 games and player2 starts
         num/2 games.
@@ -93,7 +96,9 @@ class Arena():
         oneWon = 0
         twoWon = 0
         draws = 0
-        for _ in tqdm(range(num), desc="Arena.playGames (1)"):
+        use_tqdm = use_tqdm and tqdm is not None
+        loop_1 = tqdm(range(num), desc="Arena.playGames (1)") if use_tqdm else range(num)
+        for _ in loop_1:
             gameResult = self.playGame(verbose=verbose)
             if gameResult == 1:
                 oneWon += 1
@@ -104,7 +109,8 @@ class Arena():
 
         self.player1, self.player2 = self.player2, self.player1
 
-        for _ in tqdm(range(num), desc="Arena.playGames (2)"):
+        loop_2 = tqdm(range(num), desc="Arena.playGames (2)") if use_tqdm else range(num)
+        for _ in loop_2:
             gameResult = self.playGame(verbose=verbose)
             if gameResult == -1:
                 oneWon += 1
