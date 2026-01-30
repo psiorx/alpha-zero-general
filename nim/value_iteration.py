@@ -1,4 +1,5 @@
 import argparse
+import time
 
 import numpy as np
 
@@ -21,6 +22,13 @@ def bellman_backup(values, max_stones, max_take):
     return new_values
 
 
+def solve_values(max_stones, max_take, iters):
+    values = np.zeros(max_stones + 1, dtype=np.float64)
+    for _ in range(iters):
+        values = bellman_backup(values, max_stones, max_take)
+    return values
+
+
 def main():
     parser = argparse.ArgumentParser(description="Solve misere Nim via value iteration.")
     parser.add_argument('--max_stones', type=int, default=21, help='Number of stones')
@@ -28,10 +36,9 @@ def main():
     parser.add_argument('--iters', type=int, default=50, help='Number of Bellman backups')
     args = parser.parse_args()
 
-    values = np.zeros(args.max_stones + 1, dtype=np.float64)
-
-    for _ in range(args.iters):
-        values = bellman_backup(values, args.max_stones, args.max_take)
+    start = time.perf_counter()
+    values = solve_values(args.max_stones, args.max_take, args.iters)
+    elapsed_ms = (time.perf_counter() - start) * 1000.0
 
     print("stones | value | optimal_take")
     print("-------+-------+-------------")
@@ -50,6 +57,8 @@ def main():
                 best = v
                 best_take = take
         print(f"{stones:>6} | {best:+.3f} | {best_take}")
+
+    print(f"solve_ms: {elapsed_ms:.3f}")
 
 
 if __name__ == '__main__':
