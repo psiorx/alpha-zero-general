@@ -34,6 +34,7 @@ def optimal_winning_action(stones, max_take=3):
 def evaluate_sims(game, sims, temp):
     mcts_args = dotdict({'numMCTSSims': sims, 'cpuct': 1.0, 'debug': False})
     net = UniformNNet(game)
+    details = []
 
     for stones in range(1, game.getMaxStones() + 1):
         board = np.array([[stones]], dtype=np.int8)
@@ -50,6 +51,8 @@ def evaluate_sims(game, sims, temp):
 
         # expected value by MCTS policy
         mcts_v = float(np.dot(np.array(pi, dtype=np.float64), np.array(q_vals, dtype=np.float64)))
+        outcome = "win" if best_q > 0 else "lose"
+        details.append((stones, best_action, best_q, mcts_v, outcome))
 
         # ground truth
         losing = (stones % 4 == 1)
@@ -65,7 +68,7 @@ def evaluate_sims(game, sims, temp):
             if winning_action is not None and best_action != winning_action:
                 return False, stones, best_action, best_q, mcts_v
 
-    return True, None, None, None, None
+    return True, details, None, None, None
 
 
 def main():
@@ -78,12 +81,15 @@ def main():
     game = NimGame()
 
     for sims in range(1, args.max_sims + 1, args.step):
-        ok, stones, action, q, v = evaluate_sims(game, sims, args.temp)
+        ok, details, stones, action, q = evaluate_sims(game, sims, args.temp)
         if ok:
             print(f"min_sims={sims}")
+            for stones, best_action, best_q, mcts_v, outcome in details:
+                take = best_action + 1
+                print(f"stones={stones:>2} take={take} best_q={best_q:+.3f} value={mcts_v:+.3f} outcome={outcome}")
             return
         if sims % 50 == 0:
-            print(f"sims={sims} failed at stones={stones} action={action} best_q={q:.3f} v={v:.3f}")
+            print(f"sims={sims} failed at stones={stones} action={action} best_q={q:.3f}")
 
     print("No solution found up to max_sims.")
 
